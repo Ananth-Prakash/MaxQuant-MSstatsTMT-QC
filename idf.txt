@@ -1,0 +1,41 @@
+MAGE-TAB Version	1.1		
+Investigation Title	Proteomics of Brain Proteome Revealed Altered Mitochondrial Function in Alzheimer Disease		
+Experiment Description	A discovery-driven approach with isobaric tag for relative and absolute quantitation (iTRAQ) and label-free quantitative proteomics was used to profiled the mitochondrial proteome in human brain tissues of healthy and AD individuals.		
+Experimental Design	organism part comparison design		
+Experimental Design Term Source REF	EFO		
+Experimental Design Term Accession Number	EFO:0001750		
+Experimental Factor Name	organism part	braak	
+Experimental Factor Type	organism part	braak	
+Experimental Factor Term Source REF	EFO		
+Experimental Factor Term Accession Number	EFO_0000635		
+Person Last Name	Prakash	Adav	SK
+Person First Name	Ananth	Sunil	Sze
+Person Mid Initials			
+Person Email	ananth@ebi.ac.uk	ssadav@ntu.edu.sg	sksze@ntu.edu.sg
+Person Phone			
+Person Fax			
+Person Address	"Wellcome Genome Campus, Hinxton, Cambridge. CB10 1SD"	"Nanyang Technological University, 60 Nanyang Drive, Singapore, 637551, Singapore."	
+Person Affiliation	European Bioinformatics Institute	"School of Biological Sciences, Division of Structural Biology and Biochemistry"	
+Person Roles	curator	experiment performer;submitter	
+Public Release Date	15/04/2020		
+PubMed ID	30691479		
+Publication DOI	"10.1186/s13041-019-0430-y
+PMCID: PMC6350377"		
+Publication Author List	"Adav SS, Park JE, Sze SK."		
+Publication Title	Quantitative profiling brain proteomes revealed mitochondrial dysfunction in Alzheimer's disease.		
+Publication Status	published		
+Publication Status Term Source REF	EFO		
+Publication Status Term Accession Number	EFO_0001796		
+Term Source Name	EFO		
+Term Source File	http://www.ebi.ac.uk/efo/		
+Term Source Version			
+Protocol Name	Protocol 1	Protocol 2	
+Protocol Type	proteomic profiling by mass spectrometer	sample collection protocol	
+Protocol Term Source REF	EFO	EFO	
+Protocol Term Accession Number	EFO_0002766	EFO_0005518	
+Protocol Description	Proteomic profiling was done by mass spectrometer. Further details can be found in the referenced publication.	A discovery-driven approach with isobaric tag for relative and absolute quantitation (iTRAQ) and label-free quantitative proteomics was used to profiled the mitochondrial proteome in human brain tissues of healthy and AD individuals.	
+SDRF File	E-PROT.sdrf.txt		
+Comment[TemplateType]	Human - proteomic profiling by array		
+Comment[AEExperimentType]	proteomic profiling by mass spectrometer		
+Comment[SecondaryAccession]	PXD012203		
+Comment[ExpressionAtlasAccession]	E-PROT-39		

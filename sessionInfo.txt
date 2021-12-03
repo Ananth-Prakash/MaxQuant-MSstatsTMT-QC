@@ -1,0 +1,55 @@
+R version 4.0.2 (2020-06-22)
+Platform: x86_64-apple-darwin17.0 (64-bit)
+Running under: macOS  10.16
+
+Matrix products: default
+LAPACK: /Library/Frameworks/R.framework/Versions/4.0/Resources/lib/libRlapack.dylib
+
+locale:
+[1] en_GB.UTF-8/en_GB.UTF-8/en_GB.UTF-8/C/en_GB.UTF-8/en_GB.UTF-8
+
+attached base packages:
+ [1] grid      stats4    parallel  stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] MSstatsTMT_1.6.6       ggpubr_0.4.0           ggrepel_0.9.1          Hmisc_4.6-0            Formula_1.2-4         
+ [6] survival_3.2-13        lattice_0.20-45        pheatmap_1.0.12        dplyr_1.0.7            heatmap3_1.1.9        
+[11] RColorBrewer_1.1-2     viridis_0.6.2          viridisLite_0.4.0      kableExtra_1.3.4       tibble_3.1.6          
+[16] data.table_1.14.2      finalfit_1.0.3         gtools_3.9.2           knitr_1.36             plyr_1.8.6            
+[21] mygene_1.24.0          GenomicFeatures_1.40.1 AnnotationDbi_1.50.3   Biobase_2.48.0         GenomicRanges_1.40.0  
+[26] GenomeInfoDb_1.24.2    IRanges_2.22.2         S4Vectors_0.26.1       BiocGenerics_0.34.0    ggplot2_3.3.5         
+[31] tidyr_1.1.4            reshape2_1.4.4         stringr_1.4.0          matrixStats_0.61.0    
+
+loaded via a namespace (and not attached):
+  [1] snow_0.4-4                  backports_1.3.0             BiocFileCache_1.12.1        systemfonts_1.0.3          
+  [5] splines_4.0.2               BiocParallel_1.22.0         digest_0.6.28               foreach_1.5.1              
+  [9] htmltools_0.5.2             lmerTest_3.1-3              fansi_0.5.0                 magrittr_2.0.1             
+ [13] checkmate_2.0.0             memoise_2.0.0               cluster_2.1.2               limma_3.44.3               
+ [17] fastcluster_1.2.3           Biostrings_2.56.0           svglite_2.0.0               askpass_1.1                
+ [21] prettyunits_1.1.1           jpeg_0.1-9                  colorspace_2.0-2            blob_1.2.2                 
+ [25] rvest_1.0.2                 rappdirs_0.3.3              xfun_0.28                   crayon_1.4.2               
+ [29] RCurl_1.98-1.5              jsonlite_1.7.2              lme4_1.1-27.1               iterators_1.0.13           
+ [33] glue_1.5.0                  gtable_0.3.0                zlibbioc_1.34.0             XVector_0.28.0             
+ [37] webshot_0.5.2               DelayedArray_0.14.1         car_3.0-12                  abind_1.4-5                
+ [41] scales_1.1.1                DBI_1.1.1                   rstatix_0.7.0               Rcpp_1.0.7                 
+ [45] progress_1.2.2              htmlTable_2.3.0             foreign_0.8-81              bit_4.0.4                  
+ [49] preprocessCore_1.50.0       sqldf_0.4-11                htmlwidgets_1.5.4           httr_1.4.2                 
+ [53] gplots_3.1.1                ellipsis_0.3.2              mice_3.13.0                 pkgconfig_2.0.3            
+ [57] XML_3.99-0.8                farver_2.1.0                nnet_7.3-16                 dbplyr_2.1.1               
+ [61] utf8_1.2.2                  tidyselect_1.1.1            labeling_0.4.2              rlang_0.4.12               
+ [65] munsell_0.5.0               tools_4.0.2                 cachem_1.0.6                cli_3.1.0                  
+ [69] gsubfn_0.7                  generics_0.1.1              RSQLite_2.2.8               broom_0.7.10               
+ [73] evaluate_0.14               fastmap_1.1.0               yaml_2.2.1                  bit64_4.0.5                
+ [77] caTools_1.18.2              purrr_0.3.4                 nlme_3.1-153                xml2_1.3.2                 
+ [81] biomaRt_2.44.4              compiler_4.0.2              rstudioapi_0.13             curl_4.3.2                 
+ [85] png_0.1-7                   ggsignif_0.6.3              marray_1.66.0               statmod_1.4.36             
+ [89] stringi_1.7.5               forcats_0.5.1               Matrix_1.3-4                nloptr_1.2.2.3             
+ [93] vctrs_0.3.8                 MSstats_3.20.3              pillar_1.6.4                lifecycle_1.0.1            
+ [97] BiocManager_1.30.16         bitops_1.0-7                rtracklayer_1.48.0          R6_2.5.1                   
+[101] latticeExtra_0.6-29         KernSmooth_2.23-20          gridExtra_2.3               codetools_0.2-18           
+[105] MASS_7.3-54                 boot_1.3-28                 assertthat_0.2.1            chron_2.3-56               
+[109] SummarizedExperiment_1.18.2 proto_1.0.0                 openssl_1.4.5               minpack.lm_1.2-1           
+[113] withr_2.4.2                 GenomicAlignments_1.24.0    Rsamtools_2.4.0             GenomeInfoDbData_1.2.3     
+[117] doSNOW_1.0.19               mgcv_1.8-38                 hms_1.1.1                   rpart_4.1-15               
+[121] minqa_1.2.4                 rmarkdown_2.11              carData_3.0-4               numDeriv_2016.8-1.1        
+[125] base64enc_0.1-3            

@@ -1,0 +1,13 @@
+Sample	Replicate	iTRAQ channel	Condition
+1.AD	A	114	Early onset Non-demented control
+1.AD	B	114	Early onset Non-demented control
+1.AD	C	114	Early onset Non-demented control
+2.AD	A	115	Early onset Alzheimer's disease
+2.AD	B	115	Early onset Alzheimer's disease
+2.AD	C	115	Early onset Alzheimer's disease
+3.AD	A	116	Late onset Non-demented control
+3.AD	B	116	Late onset Non-demented control
+3.AD	C	116	Late onset Non-demented control
+4.AD	A	117	Late onset Alzheimer's disease
+4.AD	B	117	Late onset Alzheimer's disease
+4.AD	C	117	Late onset Alzheimer's disease

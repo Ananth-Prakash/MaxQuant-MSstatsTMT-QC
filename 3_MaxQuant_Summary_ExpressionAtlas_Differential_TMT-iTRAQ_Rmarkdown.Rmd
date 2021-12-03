@@ -1,0 +1,577 @@
+---
+title: "Summary of reanalysed MaxQuant output exported into Expression Atlas"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(knitr)
+library(stringr)
+library(mygene)
+library(ggplot2)
+library(gtools)
+library(reshape2)
+library(Biobase)
+library(finalfit)
+library(data.table)
+library(tibble)
+library(kableExtra)
+```
+
+```{r, echo = FALSE, include=FALSE}
+dir <- "/Users/ananth/Documents/MSstats_scripts_for_Andrew/"
+
+tmp  <- read.table( paste(dir,"proteinGroups.txt", sep="") , quote = "\"", header = TRUE, sep = "\t", stringsAsFactors = FALSE, comment.char = "#")
+
+differential_foldchange <- read.table( paste(dir,"ExpressionAtlas_FoldChange_groupcomparison.txt", sep="") , quote = "\"", header = TRUE, sep = "\t", stringsAsFactors = FALSE, comment.char = "#")
+
+idf  <- read.table( paste(dir,"idf.txt", sep="") , quote = "\"", header = TRUE, sep = "\t", stringsAsFactors = FALSE, comment.char = "#", fill=TRUE)
+
+sample_channels <-read.table( paste(dir,"sample_channel_annotation.txt", sep="") , quote = "\"", header = TRUE, sep = "\t", stringsAsFactors = FALSE, comment.char = "#")
+
+PI_name <-tibble::enframe(idf[idf$MAGE.TAB.Version == "Person Last Name" | idf$MAGE.TAB.Version == "Person First Name",4])
+PI_email <- tibble::enframe(idf[idf$MAGE.TAB.Version == "Person Email",4])
+Submitter_name <- tibble::enframe(idf[idf$MAGE.TAB.Version == "Person Last Name" | idf$MAGE.TAB.Version == "Person First Name",3])
+Submitter_email <- tibble::enframe(idf[idf$MAGE.TAB.Version == "Person Email",3])
+pubmed_id <- tibble::enframe(idf[idf$MAGE.TAB.Version == "PubMed ID",2])
+pride_id <- tibble::enframe(idf[idf$MAGE.TAB.Version == "Comment[SecondaryAccession]",2])
+pride_link <- tibble::enframe(paste("https://www.ebi.ac.uk/pride/archive/projects/", pride_id$value, sep=""))
+affiliation <- tibble::enframe(idf[idf$MAGE.TAB.Version == "Person Address",3])
+
+save(sample_channels, file = paste(dir,"table_sample_channels.rda", sep=""))
+```
+
+```{r, echo = FALSE, include=FALSE}
+###### Functions ############
+#####
+# Normalise iBAQ values
+# FOT normalisation
+# define FOT normalisation function
+# FOT stands for Fraction Of Total. In this normalisation method each protein iBAQ intensity value is scaled to the total amount of signal in a given MS run (column) and transformed to parts per billion (ppb)
+
+fot.normalise <- function(x){
+  data.sum <-   apply(x, 2, function(y){sum(y, na.rm=TRUE)})
+  ##### do ppm normalisation
+  x.mat <- as.matrix(x)
+  x.mat.ppb <- apply(x.mat, 2, function(i) i/sum(i, na.rm = T) * 1000000000 )
+  x.mat.ppb <- as.data.frame(x.mat.ppb)
+  colnames(x.mat.ppb) <- paste("ppb.", colnames(x.mat.ppb), sep = "")
+  return(x.mat.ppb)
+}
+
+#####
+# Counting number of proteins in each sample
+# Since there is no direct protein count for each sample in MaxQuant output
+# we look at intensity coloumn for each sample and if the intensity value is 0, then the protein count is 0
+# for non zero intensity count the protein count for that sample is the same as in teh coloumn "Number.of.proteins".
+# https://mgimond.github.io/ES218/Week03a.html
+
+Proteincount_per_sample <- function(df){
+  #Intensity_data_cols <- c(grep("Intensity.", colnames(df) ) )
+  Intensity_data_cols <- c(grep("Reporter.intensity.[0-9].", colnames(df) ) )
+  Intensity <- df[,c("Protein.IDs","Number.of.proteins")]
+  
+  Proteincount_persample <- Intensity
+  
+  Proteincount_persample$Sprot_counts <- NA
+  
+  for(i in 1:nrow(Proteincount_persample)){  
+    y <- strsplit(Proteincount_persample[ i, "Protein.IDs"], split = ";")
+    y <- unique(gsub("-\\d+", "", y[[1]], perl=TRUE)) # remove isoform number and consider unique entries
+    Proteincount_persample[i, "Sprot_counts"] <- sum(str_count(y, "sp\\|")) # only count SwissProt entries
+  }
+  
+  Proteincount_persample <- cbind(Proteincount_persample, df[,Intensity_data_cols[1]:tail(Intensity_data_cols, n=1)])
+  
+  Proteincount_persample <- mutate_at(Proteincount_persample, vars(colnames(Proteincount_persample[,c(-1,-2, -3)])), 
+                                      list(~ ifelse( . == 0, 0, Proteincount_persample$Sprot_counts)))
+  
+  setnames(Proteincount_persample, old = c(-1,-2,-3), new = gsub("Intensity", "Protein.count",colnames(Proteincount_persample[,c(-1,-2,-3)]),perl=TRUE))
+  
+  Proteincount_sum_persample <- data.frame(lapply(Proteincount_persample[,c(-1,-2,-3)], function(y){sum(y)}))
+  return(Proteincount_sum_persample)
+}
+
+#####
+# Counting number of peptides in each sample
+
+Peptide_count_per_sample <- function(df){
+  Peptide_data_cols <- c(grep("", colnames(df)))
+  Peptidecount_sum_persample <- data.frame(lapply(df[,Peptide_data_cols[1]:tail(Peptide_data_cols, n=1)], function(y){sum(y)}))
+  Peptidecount_cnames <- colnames(Peptidecount_sum_persample)
+  Peptidecount_long <- gather(Peptidecount_sum_persample, Samples, Peptide_count_sum, Peptidecount_cnames[1]:tail(Peptidecount_cnames, n=1), factor_key=TRUE)
+  return(Peptidecount_long)
+}
+```
+
+```{r, echo = FALSE, include=FALSE}
+###### Pre-processing #######
+
+# count number of samples and protein groups (before filtering)
+number_of_proteingroups <- nrow(tmp)
+number_of_contaminants_pre <- nrow(tmp[ tmp[, "Potential.contaminant"] == "+", ])
+number_of_reversedecoys_pre <- nrow(tmp[ tmp[, "Reverse"] == "+", ])
+number_of_samples_pre <- ncol(tmp[ ,c(grep("Reporter.intensity.corrected.[0-9].", colnames(tmp))) ])
+number_of_peptides_pre <- sum(tmp$Peptides)
+number_of_unique_peptides_pre <- sum(tmp$Unique.peptides)
+number_of_unique_gene_mappings_pre <- NA
+
+#Count number of SwissProt entries without isoforms (before filtering)
+tmp$Sprot_counts <- "NA"
+
+for(i in 1:nrow(tmp)){
+    
+  y <- strsplit(tmp[ i, "Protein.IDs"], split = ";")
+  y <- unique(gsub("-\\d+", "", y[[1]], perl=TRUE)) # remove isoform number and consider unique entries
+  
+  tmp[i, "Sprot_counts"] <- sum(str_count(y, "sp\\|"))
+}
+
+#Count number of SwissProt entries without isoforms (before filtering)
+Swissprot_sum_pre <- sum(as.numeric(as.character(tmp$Sprot_counts)))
+
+table1 <- rbind(number_of_samples_pre, number_of_contaminants_pre, number_of_reversedecoys_pre, Swissprot_sum_pre, number_of_peptides_pre, number_of_unique_gene_mappings_pre, number_of_unique_peptides_pre)
+```
+
+```{r, echo = FALSE, include=FALSE}
+###### Post-processing ######
+# Apply filter 1
+tmp <- tmp[ tmp[, "Reverse"] != "+", ]
+tmp <- tmp[ tmp[, "Potential.contaminant"] != "+", ]
+
+tmp$"ENSG" <- "NA"
+tmp$"Gene.Name" <- "NA"
+tmp$"Gene.Symbol" <- "NA"
+tmp$"unique.gene.count" <- "NA"
+ 
+# Map UniProt Accessionto ENSEMBL Gene ID/Symbol
+for(i in 1:nrow(tmp)){
+    
+    x <- data.frame(strsplit(tmp[ i, "Majority.protein.IDs"], split = ";"), stringsAsFactors = FALSE)
+    
+    x[,1] <- gsub("sp\\||tr\\|", "", x[,1], perl=TRUE)
+    x[,1] <- gsub("\\|.*", "", x[,1], perl=TRUE)
+    x[,1] <- gsub("-\\d+", "", x[,1], perl=TRUE) # remove isoform number
+    
+    f = file()
+    sink(file=f)
+    a <- tryCatch(queryMany(x, scopes="uniprot", fields=c("ensembl.gene", "symbol", "name"), species="human"), error = function(e) {print(0)})
+    sink()
+    close(f)
+                 # DFrame not DataFrame 
+    if (class(a)=="DFrame"){
+    tmp[ i, "ENSG"] <- paste( unique(unlist(a$ensembl.gene[!is.na(a$ensembl.gene)])), collapse = ";")
+    tmp[ i, "Gene.Name"] <- paste( unique(unlist(a$name[!is.na(a$name)])), collapse = ";")
+    tmp[ i, "Gene.Symbol"] <- paste( unique(unlist(a$symbol[!is.na(a$symbol)])), collapse = ";")
+    temp_name <- tmp[i,"Gene.Name"]
+    tmp[ i , "unique.gene.count"] <- str_count(unique(temp_name), ";")+1
+  }
+}
+
+# Apply Filter 2
+# remove protein groups that have no mapping to ENSG gene IDs
+tmp <- tmp[tmp$ENSG != "" ,]
+tmp <- tmp[tmp$ENSG != "NA" ,]
+tmp <- tmp[tmp$unique.gene.count == 1, ]
+tmp <- tmp[ tmp[, "Peptides"] > 1, ]
+
+# count number of samples and protein groups (after filtering)
+number_of_samples_post <- ncol(tmp[ ,c(grep("Reporter.intensity.corrected.[0-9].", colnames(tmp))) ])
+#number_of_protein_groups <- nrow(tmp)
+number_of_peptides_post <- sum(tmp$Peptides)
+number_of_unique_peptides_post <- sum(tmp$Unique.peptides)
+number_of_contaminants_post <- nrow(tmp[ tmp[, "Potential.contaminant"] == "+", ])
+number_of_reversedecoys_post <- nrow(tmp[ tmp[, "Reverse"] == "+", ])
+number_of_unique_gene_mappings_post <- nrow(tmp[tmp[, "unique.gene.count"] == 1, ])
+```
+
+```{r, echo = FALSE, include=FALSE}
+######## Intensity normalisation
+###### For TMT/iTRAQ datasets
+
+EXP_TYPE <- "iTRAQ" 
+# if experiment is TMT, use reporter intensities, 
+# if experiment iTRAQ use Intensities. 
+# Note, MaxQuant might change how it reports iTRAQ and TMT intensities.
+if((EXP_TYPE == "TMT") || (EXP_TYPE == "iTRAQ")){
+  
+    sample_replicates <- read.table("sample_replicates.txt" , quote = "\"", header = TRUE, sep = "\t", stringsAsFactors = FALSE, comment.char = "#")
+    # Filter to consider only protein groups for which the at least 50 % of the sample replicates 
+    # have non-zero intensity values
+    for(i in 1:nrow(sample_replicates))
+    {
+      sample_replicates[i,] <- gsub("^","Reporter.intensity.corrected.", sample_replicates[i,], perl=TRUE)
+      
+      subdata <- tmp[, c(unname(unlist(sample_replicates[i,-1])))]
+      tmp$replicate_nonzero_instensity_count <- apply(subdata[1:ncol(subdata)], 1, function(x) length(which(x != 0)) )
+      
+      tmp <- tmp[tmp$replicate_nonzero_instensity_count >= ncol(subdata)/2,]
+    }
+    tmp_intensities_pre_normalised <- tmp[ ,c(2, grep("Reporter.intensity.corrected.[0-9].{1,}", colnames(tmp))) ]
+  } else {
+    tmp_intensities_pre_normalised <- tmp[ ,c(2, grep("Intensity.", colnames(tmp))) ]
+  }
+
+Majority.protein.IDs <- tmp$Majority.protein.IDs
+tmp_nonids <- tmp_intensities_pre_normalised[,-1]
+tmp_intensities_ppb_normalised <- fot.normalise(tmp_nonids)
+tmp_intensities_ppb_normalised <- data.frame( cbind(Majority.protein.IDs, tmp_intensities_ppb_normalised, stringsAsFactors = FALSE) )
+
+# intensities
+cnames_intensities_ppb <- colnames(tmp_intensities_ppb_normalised)
+
+tmp_intensities_ppb_table <- gather(tmp_intensities_ppb_normalised, Samples, Intensity, cnames_intensities_ppb[2]:tail(cnames_intensities_ppb, n=1), factor_key=TRUE)
+tmp_intensities_ppb_table$Samples <- gsub("Reporter.intensity.corrected.|ppb.Reporter.intensity.corrected.|Intensity.|ppb.Intensity.", "", tmp_intensities_ppb_table$Samples, perl=TRUE)
+tmp_intensities_ppb_table <- tmp_intensities_ppb_table[str_order(tmp_intensities_ppb_table$Samples, numeric=TRUE),]
+save(tmp_intensities_ppb_table, file = paste(dir,"intensity_plot_ExAtlas.rda", sep=""))
+```
+
+```{r, echo = FALSE, include=FALSE}
+#####
+# Counting number of proteins in each sample (post-processed)
+
+Proteincount_persample_post <- Proteincount_per_sample(tmp)
+Proteincount_cnames_post <- colnames(Proteincount_persample_post)
+proteincount_table_post <- gather(Proteincount_persample_post, Samples, Protein_count_sum, Proteincount_cnames_post[1]:tail(Proteincount_cnames_post, n=1), factor_key=TRUE)
+proteincount_table_post <- proteincount_table_post[str_order(proteincount_table_post$Samples, numeric=TRUE),]
+proteincount_table_post$Samples <- gsub("Protein.count.", "", proteincount_table_post$Samples, perl=TRUE) 
+proteincount_table_post$Samples <- gsub("Reporter.intensity.", "", proteincount_table_post$Samples, perl=TRUE) 
+save(proteincount_table_post, file = paste(dir,"proteincount_plot_ExAtlas.rda", sep=""))
+
+
+#####
+#Count number of SwissProt entries without isoforms (after filtering)
+Swissprot_sum_post <- sum(as.numeric(as.character(tmp$Sprot_counts)))
+
+
+#####
+# Counting number of peptides in each sample
+peptidecount_persample <- tmp[, c(grep("Peptides.", colnames(tmp)))]
+peptidecount_table <- Peptide_count_per_sample(peptidecount_persample )
+peptidecount_table <- peptidecount_table[str_order(peptidecount_table$Samples, numeric=TRUE),]
+peptidecount_table$Samples <- gsub("Peptides.", "", peptidecount_table$Samples, perl=TRUE) 
+save(peptidecount_table, file = paste(dir,"peptidecount_plot_ExAtlas.rda", sep=""))
+
+```
+
+```{r, echo = FALSE, include=FALSE}
+######
+# Differential fold change
+
+# foldchange <- differential_foldchange[,c("log2FC", "adj.pvalue", "Gene.Symbol")]
+# foldchange$threshold = as.factor(foldchange$adj.pvalue < 0.05)
+# save(foldchange, file = paste(dir,"FoldChange_plot_ExAtlas.rda", sep=""))
+
+foldchange_Early_AD_NonDemented <- differential_foldchange[,c("EarlyOnset_Alzheimer.s.vs..EarlyOnset_Non_demented.foldChange", "EarlyOnset_Alzheimer.s.vs..EarlyOnset_Non_demented.pValue", "Gene.Symbol")]
+foldchange_Early_AD_NonDemented$Contrast <- rep("EarlyOnset_Alzheimer.s.vs..EarlyOnset_Non_demented", nrow(foldchange_Early_AD_NonDemented))
+colnames(foldchange_Early_AD_NonDemented) <- c("FoldChange", "Pvalue", "Gene.Symbol", "Contrast")
+
+foldchange_Late_AD_NonDemented  <- differential_foldchange[,c("LateOnset_Alzheimer.s.vs..LateOnset_Non_demented.foldChange", "LateOnset_Alzheimer.s.vs..LateOnset_Non_demented.pValue", "Gene.Symbol")]
+foldchange_Late_AD_NonDemented$Contrast <- rep("LateOnset_Alzheimer.s.vs..LateOnset_Non_demented", nrow(foldchange_Late_AD_NonDemented ))
+colnames(foldchange_Late_AD_NonDemented ) <- c("FoldChange", "Pvalue", "Gene.Symbol", "Contrast")
+
+
+foldchange <- rbind(foldchange_Early_AD_NonDemented, foldchange_Late_AD_NonDemented)
+foldchange$threshold = as.factor(foldchange$Pvalue < 0.05)
+
+save(foldchange, file = paste(dir,"FoldChange_plot_ExAtlas.rda", sep=""))
+
+```
+
+```{r, echo = FALSE, include=FALSE}
+##############
+## For Plots
+
+# Protein identification overlap
+# counting number of proteins that are found across different samples.
+Protein_overlap <- function(df){
+  if((EXP_TYPE == "TMT") || (EXP_TYPE == "iTRAQ")){
+    Intensity_data_cols <- c(grep("Reporter.intensity.corrected.[0-9].{1,}", colnames(df) ) )
+  } else {
+    Intensity_data_cols <- c(grep("Intensity.", colnames(df) ) )
+  }
+  
+  Intensity <- df[,c("Protein.IDs","Number.of.proteins")]
+  
+  Intensity <- cbind(Intensity, df[,Intensity_data_cols[1]:tail(Intensity_data_cols, n=1)])
+  
+  Protein_overlap <- Intensity
+  Protein_overlap <- mutate_at(Protein_overlap, vars(colnames(Protein_overlap[,c(-1,-2)])), 
+                                      list(~ ifelse( . == 0, 0, 1)))
+  
+  Protein_overlap_all <- data.frame(Protein.overlap = rowSums(Protein_overlap[,c(-1,-2)]))
+  return(Protein_overlap_all)
+}
+
+Protein_overlap_all <- Protein_overlap(tmp)
+tmp <- cbind(tmp, Protein_overlap_all)
+
+#dplyr::count gives error hence using plyr::count
+protein_overlap_freq <- tmp %>% plyr::count('Protein.overlap')
+save(protein_overlap_freq, file = paste(dir,"protein_overlap_plot_ExAtlas.rda", sep=""))
+
+
+table2 <- rbind(number_of_samples_post, number_of_contaminants_post, number_of_reversedecoys_post, Swissprot_sum_post, number_of_peptides_post, number_of_unique_gene_mappings_post, number_of_unique_peptides_post)
+```
+
+```{r, echo = FALSE, include=FALSE}
+#### Summary table
+table <- cbind(table1, table2)
+rownames(table) <- c("Number of samples", "Number of potential contaminants•", "Number of reverse decoys^", "Number of identified proteins†", "Total number of mapped peptidesª", "Protein groups mapped to unique gene id¢" , ".... Number of mapped unique peptides§")
+colnames(table) <- c("Pre-processed", "Post-processed*")
+save(table, file = paste(dir,"table_ExAtlas.rda", sep=""))
+
+###############
+# Correlation between samples based on normalised intensity
+# Correlation is shown between all labels (conditions: control and case)
+# therefore normalised Reporter.intensity.corrected values are considered for both TMT and iTRAQ studies
+
+tmp_intensities_pre_normalised_channels <- tmp[ ,c(grep("Reporter.intensity.corrected.[0-9].{1,}", colnames(tmp))) ]
+tmp_intensities_ppb_normalised_channels <- fot.normalise(tmp_intensities_pre_normalised_channels)
+cor_values <- cor(tmp_intensities_ppb_normalised_channels)
+colnames(cor_values) <- gsub("ppb.Reporter.intensity.corrected.", "", colnames(cor_values), perl=TRUE)
+rownames(cor_values) <- gsub("ppb.Reporter.intensity.corrected.", "", rownames(cor_values), perl=TRUE)
+row.order <- hclust(dist(cor_values))$order
+col.order <- hclust(dist(t(cor_values)))$order
+cor_values_clustered <- cor_values[row.order, col.order]
+melted_cormat <- melt(cor_values_clustered)
+save(melted_cormat, file = paste(dir,"correlationmat_ExAtlas.rda", sep=""))
+
+```
+
+```{r, echo = FALSE, include=FALSE}
+# PCA
+#tmp_iBAQs_pre_normalised <- tmp[ ,c(grep("iBAQ.", colnames(tmp))) ]
+tmp_intensities_pre_normalised_channels[tmp_intensities_pre_normalised_channels == "NaN"] <- 0
+tmp_intensities_pre_normalised_channels[is.na(tmp_intensities_pre_normalised_channels)] <- 0
+pca_intensity <- prcomp(t(tmp_intensities_pre_normalised_channels), scale = FALSE)
+pca_plot_data <- data.frame(pca_intensity$x[,1:2]) # Take components 1 and 2
+row.names(pca_plot_data) <- gsub("Reporter.intensity.corrected.", "", row.names(pca_plot_data), perl=TRUE)
+save(pca_plot_data, file = paste(dir,"intensity_PCA_plot.rda", sep=""))
+```
+
+
+<!--
+Section to print in PDF document
+-->
+
+
+PRIDE dataset identifier:\hspace{12pt}   `r pride_id$value`  
+PRIDE dataset URL:\hspace{31pt}          `r pride_link$value`  
+Lab Head:\hspace{81pt}                   `r PI_name$value`  
+E-mail:\hspace{94pt}                     `r PI_email$value`  
+Affiliation:\hspace{80pt}                `r affiliation$value`  
+Original dataset submitter:\hspace{7pt}  `r Submitter_name$value`  
+E-mail:\hspace{94pt}                     `r Submitter_email$value`  
+PubMed ID:\hspace{73pt}                  `r pubmed_id$value`  
+
+Quantification method:\hspace{25pt}      iTRAQ  
+Search database:\hspace{53pt}            Human SwissProt Proteome (UniProt, January 2020. 20,367 sequences)  
+Contaminant database:\hspace{25pt}       MaxQuant contaminants database (conf/contaminants.fasta)  
+Analysis software:\hspace{48pt}          MaxQuant v1.6.3.4  
+Operating system:\hspace{47pt}           Red Hat Enterprise Linux Server
+
+Differential analysis:\hspace{35pt}      MSstatsTMT v1.4.6  
+
+
+
+# Experimental design  
+
+Labelling method:\hspace{46pt}            iTRAQ, 4-plex  
+Design:\hspace{82pt}                      3 replicates (AD_A, AD_B, AD_C)  
+…\hspace{113pt}                           Non-demented brain samples (controls).  
+…\hspace{123pt}                           label 114 (channel name: 1.AD)  
+…\hspace{123pt}                           label 116 (channel name: 3.AD)  
+…\hspace{113pt}                           Alzheimer’s disease brain samples (cases).  
+…\hspace{123pt}                           label 115 (channel name: 2.AD)  
+…\hspace{123pt}                           label 117 (channel name: 4.AD)  
+
+
+```{r sample_channels, echo = FALSE}
+load(paste(dir,"table_sample_channels.rda", sep=""))
+kable(sample_channels, booktabs = T) %>%
+kable_styling(position="left")  
+```
+
+
+# Summary table   
+
+MaxQuant output before and after processing.  
+The submitted original '.raw' files were run through MaxQuant; the output (pre-processed) intensities were then normalised, proteins mapped to Ensembl gene IDs and filtered results (post-processed) were uploaded to Expression Atlas.
+
+Number of differenial expressed proteins numbers.....
+
+```{r table, echo = FALSE}
+load(paste(dir,"table_ExAtlas.rda", sep=""))
+kable(table, row.names=TRUE, booktabs = T) %>%
+kable_styling(position="left")  
+```
+
+\setlength{\leftskip}{0.5cm}* Data show in Expression Atlas.  
+\setlength{\leftskip}{0.5cm}• The total number of protein groups found to be a commonly occurring contaminant.  
+\setlength{\leftskip}{0.5cm}**^** The total number of protein groups with a peptide derived from the reversed part of the decoy database.  
+\setlength{\leftskip}{0.5cm}**†** The total number of non-isoform SwissProt proteins within the protein group, to which at least 2 or more peptides from each sample are mapped to.  
+\setlength{\leftskip}{0.5cm}**ª** Sum of peptides that are mapped across all protein groups.   
+\setlength{\leftskip}{0.5cm}**¢** The total number of protein groups which are mapped to an unique Ensembl Gene ID.  
+\setlength{\leftskip}{0.5cm}§ The total number of unique peptides associated with the protein group (i.e. these peptides are not shared with another protein group).  
+
+\setlength{\leftskip}{0pt}
+
+# Post-processing filters applied:
+(i) Remove reverse decoys.
+(ii) Remove potential contaminants.
+(iii) Include protein groups to which 2 or more unique peptides are mapped.
+(iv) Include protein groups wherein all protein IDs within are mapped to an unique Ensembl Gene ID.
+(v) Include protein groups wherein at least 50% sample replicates have non-zero intensity values.  
+    
+# Normalisation method:
+Fraction Of Total (FOT): Each protein intensity value is scaled to the total amount of signal in a given MS run (column) and transformed to parts per billion (ppb)
+
+
+```{r tmp_intensities_ppb_table, fig.height = 3, echo = FALSE, message=FALSE}
+# Intensity plot after normalisation
+load(paste(dir,"intensity_plot_ExAtlas.rda", sep=""))
+suppressWarnings(print(
+ggplot(tmp_intensities_ppb_table, aes(x=factor(tmp_intensities_ppb_table$Samples, levels = unique(tmp_intensities_ppb_table$Samples)),
+                                y = Intensity, colour = Samples))+
+  geom_boxplot(na.rm=TRUE)+
+  theme_bw()+
+  theme(legend.position="none")+
+  xlab("Samples")+
+  scale_y_log10()+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 5))+
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  #coord_flip()+
+  ggtitle("FOT normalised intensity values")
+))
+```
+Figure 1. Boxplots with distribution of intensity values for each sample after FOT normalisation.  
+Sample name description: **AD**: Alzheimer's Disease; A, B and C represent replicates.  
+ 
+```{r protein_overlap_plot, fig.height = 3, echo = FALSE}
+load(paste(dir,"protein_overlap_plot_ExAtlas.rda", sep=""))
+ggplot(protein_overlap_freq[protein_overlap_freq$Protein.overlap != 0, ], aes(x=factor(Protein.overlap), y = freq))+
+  geom_col()+
+  geom_text(stat = 'identity',aes(label =freq, vjust = -0.2), size=2)+
+  theme_bw()+
+  xlab("Number of samples") +
+  ylab("Number of protein groups")+
+  theme(legend.position="none")+
+  ggtitle("Protein groups commonly identified across samples")
+```
+Figure 2. Protein overlap.  Indicates the number of protein groups that were identified across different samples. Protein groups were counted as present in a sample when the sample had registered intensity.  
+  
+  
+```{r Proteincount_plot, fig.height = 3, echo = FALSE}
+# Protein count per sample after filtering
+load(paste(dir,"proteincount_plot_ExAtlas.rda", sep=""))
+ggplot(proteincount_table_post, aes(x=factor(Samples, levels = Samples), 
+                                    y = Protein_count_sum, fill=Samples))+
+  geom_col(position="dodge", alpha=0.5)+
+  geom_text(stat = 'identity',aes(label =Protein_count_sum, vjust = -0.2), size=2)+
+  theme_bw()+
+  theme(legend.position = "none")+
+  xlab("Samples")+
+  ylab("Total number of proteins across\nall protein groups")+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 5))+
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position="none")+
+  ggtitle("Total number of proteins identified in each sample")
+
+```
+Figure 3.  Protein counts in each sample. The total number of proteins (SwissProt non-isoforms) from all protein groups to which at least 2 or more unique peptides from each sample are mapped to.   
+  
+\vspace{20pt} 
+```{r Peptidecount_plot, fig.height = 3, echo = FALSE}
+# Peptide count per sample
+load(paste(dir,"peptidecount_plot_ExAtlas.rda", sep=""))
+ggplot(peptidecount_table, aes(x=factor(Samples, levels = Samples), 
+                               y = Peptide_count_sum, fill=Samples))+
+  geom_col(position="dodge", alpha=0.5)+
+  geom_text(stat = 'identity',aes(label =Peptide_count_sum, vjust = -0.2), size=2)+
+  theme_bw()+
+  theme(legend.position = "none")+
+  xlab("Samples")+
+  ylab("Total number of peptides across\nall protein groups")+
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 5))+
+  #theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(legend.position="none")+
+  ggtitle("Number of peptides mapped per group")
+
+```
+Figure 4.  Peptide counts in each sample. The total number of peptides that are mapped across all protein groups from each sample.  
+   
+```{r Correlation_plot, fig.height = 6, fig.width = 6, echo = FALSE}
+# Correlation between samples
+load(paste(dir,"correlationmat_ExAtlas.rda", sep=""))
+ggplot(melted_cormat, aes(x=Var1, y=Var2, fill=value))+
+  geom_tile()+
+  theme_bw()+
+  xlab("")+
+  ylab("")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  #guides(fill=guide_legend(title=expression(paste("Pearson R"^2))))+
+  guides(fill=guide_legend(title="Pearson r"))+
+  ggtitle("Clustered map of correlation between samples")
+  
+```
+  
+  
+Figure 5.  Correlation between samples with cases and controls. The pairwise Pearson correlation was calculated between normalised intensities of each sample and clustered heirarchically.  
+ 
+  
+  
+```{r pca_plot_data, fig.height = 6, fig.width = 6, echo = FALSE}
+# PCA 
+load(paste(dir,"intensity_PCA_plot.rda", sep=""))
+ggplot(pca_plot_data, aes(x=PC1, y = PC2, colour = rownames(pca_plot_data)))+
+  geom_point(alpha=0.6)+
+  labs(x="PC1", y="PC2")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  labs(color="Samples") +
+  theme(legend.position = "bottom")+
+  theme(legend.key.size = unit(0.3,"line"))+
+  guides(col = guide_legend(ncol = 3))+
+  ggtitle("PCA")
+```
+  
+Figure 6. PCA plot. The Reporter corrected intensity values of cases and controls are used to compute priniciple components.  
+
+
+
+```{r foldchange, fig.height = 6, fig.width = 7, echo = FALSE} 
+# Differential expression fold change
+load(paste(dir,"FoldChange_plot_ExAtlas.rda", sep=""))
+ggplot(foldchange, aes(x=FoldChange,  y = -log10(Pvalue), colour=threshold))+
+  geom_point(alpha=0.5)+
+  theme_bw()+
+  theme(legend.position = "none")+
+  xlab("log2 Fold Change")+
+  ylab("-log10 adjusted P-value")+
+  scale_colour_manual(values=c("grey", "tomato"))+
+  ggtitle("Fold change") +
+  facet_wrap(~Contrast)
+
+``` 
+  
+Figure 7.  Differential protein expression. Proteins which show statistically significant differential expression (P-value <= 0.05) are coloured red.
+
+  
+<!-- comments -->
+
+
+# Glossary
+The descriptions of the terms used in here are taken from MaxQuant documentation.  
+
+**Reverse decoy**: This particular protein group contains no protein, made up of at least 50% of the peptides of the leading protein, with a peptide derived from the reversed part of the decoy database. These are removed for further data analysis. The 50% rule is in place to prevent spurious protein hits to erroneously flag the protein group as reverse.  
+
+**Potential contaminant**: This particular protein group was found to be a commonly occurring contaminant. These are removed for further data analysis.    
+
+**Peptides**: The total number of peptide sequences associated with the protein group (i.e. for all the proteins in the group).  
+
+**Unique peptides**: The total number of unique peptides associated with the protein group (i.e. these peptides are not shared with another protein group).  

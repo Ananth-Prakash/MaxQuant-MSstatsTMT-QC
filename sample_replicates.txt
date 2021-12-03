@@ -1,0 +1,5 @@
+Sample	Replicate1	Replicate2	Replicate3
+1.AD	1.AD_A	1.AD_B	1.AD_C
+2.AD	2.AD_A	2.AD_B	2.AD_C
+3.AD	3.AD_A	3.AD_B	3.AD_C
+4.AD	4.AD_A	4.AD_B	4.AD_C
