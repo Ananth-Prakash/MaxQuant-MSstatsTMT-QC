@@ -3,7 +3,10 @@ For TMT/iTRAQ experiments
 
 The directory includes scripts for post-processing raw output from MaxQuant, calculating fold-changes using MSstatsTMT and Quality Assesment script for generating pdf document.
 
-These files should be run in this sequential order. I have named the scripts 1, 2, and 3 to help identify them.
+These files should be run in this sequential order.
+1_process-protein-groups-with-gene-names.R
+2_MSstats_MaxQuant-TMT-iTRAQ-pipeline.R
+3_MaxQuant_Summary_ExpressionAtlas_Differential_TMT-iTRAQ_Rmarkdown.Rmd
 
 The directory inlcudes all input and output files of PXD012203 (iTRAQ) for running these scripts.
 
