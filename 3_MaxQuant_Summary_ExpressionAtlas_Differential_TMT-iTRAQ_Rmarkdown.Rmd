@@ -23,7 +23,7 @@ library(kableExtra)
 ```
 
 ```{r, echo = FALSE, include=FALSE}
-dir <- "/Users/ananth/Documents/MSstats_scripts_for_Andrew/"
+dir <- "/Users/ananth/Documents/MSstatsTMT_scripts_for_Andrew/"
 
 tmp  <- read.table( paste(dir,"proteinGroups.txt", sep="") , quote = "\"", header = TRUE, sep = "\t", stringsAsFactors = FALSE, comment.char = "#")
 
@@ -276,7 +276,8 @@ colnames(foldchange_Late_AD_NonDemented ) <- c("FoldChange", "Pvalue", "Gene.Sym
 
 
 foldchange <- rbind(foldchange_Early_AD_NonDemented, foldchange_Late_AD_NonDemented)
-foldchange$threshold = as.factor(foldchange$Pvalue < 0.05)
+#threshold pvalue <= 0.05 and log2 foldchange 0.5 
+foldchange$threshold = as.factor(foldchange$Pvalue <= 0.05 & (foldchange$FoldChange > 0.5 | foldchange$FoldChange < -0.5))
 
 save(foldchange, file = paste(dir,"FoldChange_plot_ExAtlas.rda", sep=""))
 
@@ -553,13 +554,19 @@ ggplot(foldchange, aes(x=FoldChange,  y = -log10(Pvalue), colour=threshold))+
   theme(legend.position = "none")+
   xlab("log2 Fold Change")+
   ylab("-log10 adjusted P-value")+
+  geom_hline(yintercept=-log10(0.05), linetype="dashed", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = 0.5, linetype="dashed", 
+                color = "black", size=0.5)+
+   geom_vline(xintercept = -0.5, linetype="dashed", 
+                color = "black", size=0.5)+
   scale_colour_manual(values=c("grey", "tomato"))+
   ggtitle("Fold change") +
   facet_wrap(~Contrast)
 
 ``` 
   
-Figure 7.  Differential protein expression. Proteins which show statistically significant differential expression (P-value <= 0.05) are coloured red.
+Figure 7.  Differential protein expression. Proteins which show statistically significant differential expression (P-value <= 0.05 and foldchange 0.5 log2 scale) are coloured red.
 
   
 <!-- comments -->
