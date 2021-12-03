@@ -1,7 +1,7 @@
 # MaxQuant-MSstatsTMT-QC
 For TMT/iTRAQ experiments
 
-The directory includes scripts for post-processing raw output from MaxQuant, calculating fold-changes using MSstatsTMT and Quality Assesment script for generating pdf document.
+The directory includes scripts for post-processing raw output from MaxQuant, calculating foldchanges using MSstatsTMT and Quality Assessment script for generating pdf document.
 
 These files should be run in this sequential order.
 
