@@ -17,4 +17,3 @@ To note: This QC script is specific to this dataset, which is different from the
 
 To generate the IDF, make use of Annotare https://www.ebi.ac.uk/fg/annotare/login/
 
-[MaxQuant_Summary_ExpressionAtlas_Differential_TMT-iTRAQ_Rmarkdown.pdf](https://github.com/Ananth-Prakash/MaxQuant-MSstatsTMT-QC/files/7647680/MaxQuant_Summary_ExpressionAtlas_Differential_TMT-iTRAQ_Rmarkdown.pdf)
